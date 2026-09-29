@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>台形の面積</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- html2canvas for screenshot functionality -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap');
+        
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Zen Maru Gothic', sans-serif;
+            background-color: #f8fafc;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            overscroll-behavior: none;
+        }
+
+        .btn-action {
+            transition: transform 0.15s ease-out, background-color 0.15s ease, box-shadow 0.15s ease;
+            touch-action: manipulation;
+        }
+        .btn-action:active {
+            transform: scale(0.94);
+        }
+
+        .piece-draggable {
+            cursor: grab;
+            transition: filter 0.15s ease;
+            touch-action: none;
+        }
+        .piece-draggable:active {
+            cursor: grabbing;
+            filter: drop-shadow(0 8px 16px rgba(37,99,235,0.25));
+        }
+
+        canvas, svg, g, path, polygon {
+            touch-action: none;
+            -webkit-touch-callout: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Mode Button Active Styles */
+        .mode-active {
+            background-color: #2563eb !important;
+            color: #ffffff !important;
+            border-color: #1d4ed8 !important;
+            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3);
+        }
+
+        /* SVGテキストのドラッグ移動・ホバースタイル */
+        .draggable-text {
+            cursor: grab;
+            user-select: none;
+            touch-action: none;
+        }
+        .draggable-text:active {
+            cursor: grabbing;
+        }
+        /* 通常時は背景・枠線透明、ホバー時に青い点線枠と薄い青背景を表示 */
+        .draggable-text rect {
+            fill: transparent;
+            stroke: transparent;
+            rx: 8px;
+            ry: 8px;
+            transition: fill 0.15s ease, stroke 0.15s ease;
+        }
+        .draggable-text:hover rect {
+            fill: #eff6ff !important;
+            fill-opacity: 0.85 !important;
+            stroke: #3b82f6 !important;
+            stroke-width: 1.5 !important;
+            stroke-dasharray: 4,3 !important;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden bg-slate-100 relative select-none touch-none">
+
+    <!-- 全画面共通コントロールツールバー -->
+    <header class="absolute top-3 left-3 right-3 z-30 flex items-center justify-between gap-2 bg-white/95 backdrop-blur-md p-2 px-4 rounded-2xl shadow-xl border border-slate-200 pointer-events-auto overflow-x-auto whitespace-nowrap touch-none">
+        <!-- 左側：基本ツール -->
+        <div class="flex items-center gap-2 shrink-0">
+            <button id="btn-screenshot" title="スクリーンショット保存" class="h-9 px-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl font-bold text-sm shadow-sm transition flex items-center justify-center btn-action shrink-0">
+                <i class="fa-solid fa-camera"></i>
+            </button>
+            <button id="btn-undo" class="h-9 px-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-sm shadow-sm transition flex items-center gap-1.5 btn-action shrink-0">
+                <i class="fa-solid fa-rotate-left"></i> 1つもどす
+            </button>
+            <button id="btn-reset" class="h-9 px-3 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-sm transition flex items-center gap-1.5 btn-action shrink-0">
+                <i class="fa-solid fa-power-off"></i> 初めから
+            </button>
+        </div>
+
+        <div class="h-5 w-px bg-slate-300 mx-1 shrink-0"></div>
+
+        <!-- 右側：モード切替 & アクション (切る / 動かす / 回す / ふやす / PCで書く / ペンで書く) -->
+        <div class="flex items-center gap-2 shrink-0">
+            <button id="btn-mode-cut" class="mode-btn mode-active h-9 px-3 rounded-xl font-bold text-sm transition flex items-center gap-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 shadow-sm btn-action shrink-0">
+                <i class="fa-solid fa-scissors"></i> 切る
+            </button>
+            <button id="btn-mode-select" class="mode-btn h-9 px-3 rounded-xl font-bold text-sm transition flex items-center gap-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 shadow-sm btn-action shrink-0">
+                <i class="fa-solid fa-hand"></i> 動かす
+            </button>
+            <button id="btn-mode-rotate" class="mode-btn h-9 px-3 rounded-xl font-bold text-sm transition flex items-center gap-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 shadow-sm btn-action shrink-0">
+                <i class="fa-solid fa-rotate"></i> 回す
+            </button>
+            <button id="btn-duplicate" class="mode-btn h-9 px-3 rounded-xl font-bold text-sm transition flex items-center gap-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 shadow-sm btn-action shrink-0">
+                <i class="fa-solid fa-copy"></i> ふやす
+            </button>
+            <!-- 「PCで書く」ボタン（キーボードアイコン付き） -->
+            <button id="btn-mode-text" class="mode-btn h-9 px-3 rounded-xl font-bold text-sm transition flex items-center gap-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 shadow-sm btn-action shrink-0">
+                <i class="fa-solid fa-keyboard"></i> PCで書く
+            </button>
+            <button id="btn-mode-pen" class="mode-btn h-9 px-3 rounded-xl font-bold text-sm transition flex items-center gap-1.5 bg-white text-slate-700 hover:bg-slate-50 border border-slate-300 shadow-sm btn-action shrink-0">
+                <i class="fa-solid fa-pen"></i> ペンで書く
+            </button>
+
+            <!-- ペンツールカラー＆消しゴム -->
+            <div id="pen-controls" class="flex items-center gap-1.5 ml-1 shrink-0">
+                <button id="pen-black" title="黒ペン" class="pen-btn w-7 h-7 rounded-full bg-slate-800 transition shrink-0 border-2 border-white ring-2 ring-slate-800 scale-110"></button>
+                <button id="pen-red" title="赤ペン" class="pen-btn w-7 h-7 rounded-full bg-rose-500 hover:scale-105 transition shrink-0 border-2 border-white ring-2 ring-transparent"></button>
+                <button id="pen-blue" title="青ペン" class="pen-btn w-7 h-7 rounded-full bg-blue-500 hover:scale-105 transition shrink-0 border-2 border-white ring-2 ring-transparent"></button>
+                <button id="pen-eraser" title="消しゴム" class="h-8 px-2.5 bg-white hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition flex items-center gap-1 border border-slate-300 shrink-0">
+                    <i class="fa-solid fa-eraser"></i>
+                </button>
+                <button id="btn-clear-memo" title="メモを全消去" class="h-8 px-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-xs shadow-sm transition flex items-center gap-1 btn-action shrink-0">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 全画面メインエリア -->
+    <main id="capture-area" class="w-full h-full relative overflow-hidden bg-white touch-none">
+        <svg id="canvas-svg" class="w-full h-full absolute inset-0 touch-none select-none z-10" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid meet">
+            <g id="grid-layer"></g>
+            <g id="dashed-background-layer"></g>
+            <g id="pieces-layer"></g>
+            <g id="text-layer"></g>
+
+            <path id="user-cut-line" d="" stroke="#ef4444" stroke-width="2" stroke-dasharray="4,4" stroke-linecap="round" fill="none" pointer-events="none" opacity="0.95" />
+            <circle id="cut-start-indicator" cx="-100" cy="-100" r="5" fill="#ef4444" stroke="#ffffff" stroke-width="1.5" pointer-events="none" opacity="0" />
+            <circle id="cut-end-indicator" cx="-100" cy="-100" r="5" fill="#ef4444" stroke="#ffffff" stroke-width="1.5" pointer-events="none" opacity="0" />
+        </svg>
+
+        <canvas id="memo-canvas" class="w-full h-full absolute inset-0 z-20 pointer-events-none cursor-crosshair touch-none"></canvas>
+
+        <!-- インラインテキストエディタ (<textarea>) -->
+        <textarea id="text-editor" 
+            class="absolute hidden z-30 bg-white/90 border-2 border-dashed border-blue-500/90 rounded-lg outline-none font-bold text-slate-900 shadow-lg transition-none resize-none overflow-hidden" 
+            style="font-family: 'Zen Maru Gothic', sans-serif; box-sizing: border-box;"></textarea>
+    </main>
+
+    <script>
+        document.addEventListener('touchmove', function(e) {
+            if (e.target.closest('#capture-area') || e.target.closest('header')) {
+                if (e.cancelable) e.preventDefault();
+            }
+        }, { passive: false });
+
+        const svg = document.getElementById('canvas-svg');
+        const gridLayer = document.getElementById('grid-layer');
+        const dashedBgLayer = document.getElementById('dashed-background-layer');
+        const piecesLayer = document.getElementById('pieces-layer');
+        const textLayer = document.getElementById('text-layer');
+        const textEditor = document.getElementById('text-editor');
+        const userCutLine = document.getElementById('user-cut-line');
+        const cutStartIndicator = document.getElementById('cut-start-indicator');
+        const cutEndIndicator = document.getElementById('cut-end-indicator');
+        const memoCanvas = document.getElementById('memo-canvas');
+        const memoCtx = memoCanvas.getContext('2d');
+
+        const state = {
+            showGrid: true,
+            activeMode: 'cut',
+            pieces: [],
+            textElements: [],
+            editingTextId: null,
+            selectedPieceIndex: null,
+            draggedPieceIndex: null,
+            dragStartPos: { x: 0, y: 0 },
+            dragPieceStartOffset: { x: 0, y: 0 },
+            isDrawingCut: false,
+            cutStart: null,
+            cutCurrent: null,
+            penColor: '#1e293b',
+            penSize: 3,
+            isErasing: false,
+            isDrawingMemo: false,
+            lastPenPos: null
+        };
+
+        function getSvgCoords(e) {
+            const pt = svg.createSVGPoint();
+            let clientX = e.clientX;
+            let clientY = e.clientY;
+            
+            if ((clientX === undefined || clientX === null) && e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX; 
+                clientY = e.touches[0].clientY;
+            } else if ((clientX === undefined || clientX === null) && e.changedTouches && e.changedTouches.length > 0) {
+                clientX = e.changedTouches[0].clientX; 
+                clientY = e.changedTouches[0].clientY;
+            }
+            pt.x = (clientX !== undefined && clientX !== null) ? clientX : 0;
+            pt.y = (clientY !== undefined && clientY !== null) ? clientY : 0;
+            const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
+            return { x: svgP.x, y: svgP.y };
+        }
+
+        function getPolygonCentroid(pts) {
+            let cx = 0, cy = 0;
+            pts.forEach(p => { cx += p.x; cy += p.y; });
+            return { x: cx / pts.length, y: cy / pts.length };
+        }
+
+        function rotatePoint(pt, center, angleDeg) {
+            const rad = (angleDeg * Math.PI) / 180;
+            const cos = Math.cos(rad), sin = Math.sin(rad);
+            const dx = pt.x - center.x, dy = pt.y - center.y;
+            return {
+                x: center.x + (dx * cos - dy * sin),
+                y: center.y + (dx * sin + dy * cos)
+            };
+        }
+
+        const SCALE = 48;
+        const ORIGIN = { x: 96, y: 560 }; // 3マス分（144px）下に移動
+
+        function cmToSvg(pt) {
+            return { x: ORIGIN.x + pt.x * SCALE, y: ORIGIN.y - pt.y * SCALE };
+        }
+
+        function svgToCm(pt) {
+            return { x: (pt.x - ORIGIN.x) / SCALE, y: (ORIGIN.y - pt.y) / SCALE };
+        }
+
+        function snapToGridPoint(svgPt) {
+            const cmPt = svgToCm(svgPt);
+            const roundedCm = { x: Math.round(cmPt.x), y: Math.round(cmPt.y) };
+            return cmToSvg(roundedCm);
+        }
+
+        /* 台形: B(5,4), C(13,4), D(11,8), A(8,8) */
+        const BASE_TRAPEZOID = [
+            { x: 5, y: 4 },  // 点 B
+            { x: 13, y: 4 }, // 点 C
+            { x: 11, y: 8 }, // 点 D
+            { x: 8, y: 8 }   // 点 A
+        ];
+
+        let historyStack = [];
+
+        function saveHistory() {
+            if (historyStack.length > 20) historyStack.shift();
+            historyStack.push(JSON.parse(JSON.stringify({
+                pieces: state.pieces,
+                textElements: state.textElements
+            })));
+        }
+
+        /* テキストの位置または範囲が何れかの図形（ピース）と重なっているかを判定 */
+        function isTextOverlappingPiece(x, y, width, height) {
+            // テキスト領域内の複数の代表点で重なりチェック
+            const samplePoints = [
+                { x: x + 10, y: y + 10 },
+                { x: x + width / 2, y: y + height / 2 },
+                { x: x + width - 10, y: y + height - 10 }
+            ];
+
+            for (let piece of state.pieces) {
+                const center = getPolygonCentroid(piece.vertices);
+                const worldVerts = piece.vertices.map(v => {
+                    const rotated = rotatePoint(v, center, piece.rotation);
+                    return { x: rotated.x + piece.x, y: rotated.y + piece.y };
+                });
+
+                for (let pt of samplePoints) {
+                    if (isPointInPolygon(pt, worldVerts)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function positionTextEditor(svgX, svgY) {
+            const pt = svg.createSVGPoint();
+            pt.x = svgX;
+            pt.y = svgY;
+            const matrix = svg.getScreenCTM();
+            if (!matrix) return;
+
+            const screenPt = pt.matrixTransform(matrix);
+            const container = document.getElementById('capture-area');
+            const rect = container.getBoundingClientRect();
+
+            const left = screenPt.x - rect.left;
+            const top = screenPt.y - rect.top;
+            const scale = matrix.a;
+
+            const FONT_SIZE = 38; // 文字サイズ38px
+            const LINE_HEIGHT = 48; // 改行幅48px
+            textEditor.style.left = `${left}px`;
+            textEditor.style.top = `${top}px`;
+            
+            textEditor.style.fontSize = `${FONT_SIZE * scale}px`;
+            textEditor.style.lineHeight = `${LINE_HEIGHT * scale}px`;
+            textEditor.style.padding = `${2 * scale}px ${4 * scale}px`;
+            
+            autoResizeTextEditor(scale);
+        }
+
+        function autoResizeTextEditor(customScale) {
+            const matrix = svg.getScreenCTM();
+            const scale = customScale || (matrix ? matrix.a : 1);
+            const lines = textEditor.value.split('\n');
+            let maxLen = 1;
+            lines.forEach(l => { if (l.length > maxLen) maxLen = l.length; });
+            
+            const FONT_SIZE = 38;
+            const LINE_HEIGHT = 48; // 改行幅48px
+            const width = Math.max(120 * scale, (maxLen + 0.8) * FONT_SIZE * scale);
+            const height = Math.max((LINE_HEIGHT + 10) * scale, lines.length * LINE_HEIGHT * scale);
+            
+            textEditor.style.width = `${width}px`;
+            textEditor.style.height = `${height}px`;
+        }
+
+        function startTextEditing(textObj) {
+            finishTextEditing();
+            state.editingTextId = textObj.id;
+            textEditor.value = textObj.text || '';
+            positionTextEditor(textObj.x, textObj.y);
+            textEditor.classList.remove('hidden');
+            renderTextLayer();
+
+            setTimeout(() => {
+                textEditor.focus();
+                textEditor.setSelectionRange(textEditor.value.length, textEditor.value.length);
+            }, 50);
+        }
+
+        function finishTextEditing() {
+            if (!state.editingTextId) return;
+
+            const textObj = state.textElements.find(t => t.id === state.editingTextId);
+            const val = textEditor.value.trim();
+
+            saveHistory();
+
+            if (textObj) {
+                if (val === '') {
+                    state.textElements = state.textElements.filter(t => t.id !== state.editingTextId);
+                } else {
+                    textObj.text = textEditor.value;
+
+                    // 入力完了時、図形と重なっていない場合はマス目に吸着
+                    const fontSize = 38;
+                    const lineHeight = 48; // 改行幅48px
+                    const lines = textObj.text.split('\n');
+                    let maxLen = 1;
+                    lines.forEach(l => { if (l.length > maxLen) maxLen = l.length; });
+                    const w = Math.max(60, maxLen * fontSize + 16);
+                    const h = Math.max(40, lines.length * lineHeight + 12);
+
+                    if (!isTextOverlappingPiece(textObj.x, textObj.y, w, h)) {
+                        const snapped = snapToGridPoint({ x: textObj.x, y: textObj.y });
+                        textObj.x = snapped.x;
+                        textObj.y = snapped.y;
+                    }
+                }
+            }
+
+            state.editingTextId = null;
+            textEditor.classList.add('hidden');
+            textEditor.value = '';
+            renderTextLayer();
+        }
+
+        textEditor.addEventListener('input', () => autoResizeTextEditor());
+        textEditor.addEventListener('blur', () => finishTextEditing());
+        textEditor.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') finishTextEditing();
+        });
+
+        // テキストレイヤーのレンダリング（文字のみ表示・ドラッグ移動対応）
+        function renderTextLayer() {
+            textLayer.innerHTML = '';
+
+            state.textElements.forEach((item) => {
+                if (item.id === state.editingTextId) return;
+
+                const textGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                textGroup.setAttribute('class', 'draggable-text');
+                textGroup.setAttribute('data-id', item.id);
+
+                const lines = (item.text || '').split('\n');
+                const fontSize = 38; // 38px
+                const lineHeight = 48; // 改行幅48px
+
+                let maxLen = 1;
+                lines.forEach(l => { if (l.length > maxLen) maxLen = l.length; });
+                const width = Math.max(60, maxLen * fontSize + 16);
+                const height = Math.max(40, lines.length * lineHeight + 12);
+
+                // 透明な見えない枠（タッチ・ドラッグ・ホバー判定用エリア）
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', item.x);
+                rect.setAttribute('y', item.y);
+                rect.setAttribute('width', width);
+                rect.setAttribute('height', height);
+                rect.setAttribute('rx', '8');
+                rect.setAttribute('ry', '8');
+                rect.setAttribute('fill', 'transparent');
+                rect.setAttribute('stroke', 'transparent');
+                rect.setAttribute('pointer-events', 'all');
+                textGroup.appendChild(rect);
+
+                // テキスト本体
+                const textEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                textEl.setAttribute('x', item.x + 4);
+                textEl.setAttribute('y', item.y + fontSize);
+                textEl.setAttribute('font-size', fontSize);
+                textEl.setAttribute('font-weight', 'bold');
+                textEl.setAttribute('fill', '#1e293b');
+                textEl.setAttribute('pointer-events', 'none');
+                textEl.setAttribute('font-family', "'Zen Maru Gothic', sans-serif");
+
+                lines.forEach((lineStr, lineIdx) => {
+                    const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+                    tspan.setAttribute('x', item.x + 4);
+                    if (lineIdx > 0) tspan.setAttribute('dy', lineHeight);
+                    tspan.textContent = lineStr || ' ';
+                    textEl.appendChild(tspan);
+                });
+                textGroup.appendChild(textEl);
+
+                // ドラッグ移動＆タップでの再編集イベント
+                textGroup.addEventListener('pointerdown', (e) => {
+                    if (e.cancelable) e.preventDefault();
+                    e.stopPropagation();
+
+                    const start = getSvgCoords(e);
+                    const initX = item.x;
+                    const initY = item.y;
+                    let isMoved = false;
+
+                    const onPointerMove = (moveEvt) => {
+                        const curr = getSvgCoords(moveEvt);
+                        const dx = curr.x - start.x;
+                        const dy = curr.y - start.y;
+
+                        if (Math.hypot(dx, dy) > 3) {
+                            if (!isMoved) {
+                                saveHistory();
+                                isMoved = true;
+                            }
+                            let targetX = initX + dx;
+                            let targetY = initY + dy;
+
+                            item.x = targetX;
+                            item.y = targetY;
+
+                            rect.setAttribute('x', item.x);
+                            rect.setAttribute('y', item.y);
+                            textEl.setAttribute('x', item.x + 4);
+                            textEl.setAttribute('y', item.y + fontSize);
+                            textEl.querySelectorAll('tspan').forEach(ts => ts.setAttribute('x', item.x + 4));
+                        }
+                    };
+
+                    const onPointerUp = () => {
+                        window.removeEventListener('pointermove', onPointerMove);
+                        window.removeEventListener('pointerup', onPointerUp);
+                        window.removeEventListener('pointercancel', onPointerUp);
+
+                        if (isMoved) {
+                            // ドロップ時に図形と重なっていない場合はマス目に吸着
+                            if (!isTextOverlappingPiece(item.x, item.y, width, height)) {
+                                const snapped = snapToGridPoint({ x: item.x, y: item.y });
+                                item.x = snapped.x;
+                                item.y = snapped.y;
+                                renderTextLayer();
+                            }
+                        } else {
+                            // タップ/クリック時は再編集
+                            setMode('text');
+                            finishTextEditing();
+                            startTextEditing(item);
+                        }
+                    };
+
+                    window.addEventListener('pointermove', onPointerMove);
+                    window.addEventListener('pointerup', onPointerUp);
+                    window.addEventListener('pointercancel', onPointerUp);
+                });
+
+                textLayer.appendChild(textGroup);
+            });
+        }
+
+        function renderGrid() {
+            gridLayer.innerHTML = '';
+            if (!state.showGrid) return;
+
+            const minCmX = -1, maxCmX = 26;
+            const minCmY = -2, maxCmY = 12;
+
+            for (let x = minCmX; x <= maxCmX; x++) {
+                const pt1 = cmToSvg({ x: x, y: minCmY });
+                const pt2 = cmToSvg({ x: x, y: maxCmY });
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', pt1.x); line.setAttribute('y1', pt1.y);
+                line.setAttribute('x2', pt2.x); line.setAttribute('y2', pt2.y);
+                line.setAttribute('stroke', '#cbd5e1'); line.setAttribute('stroke-width', '1');
+                line.setAttribute('pointer-events', 'none');
+                gridLayer.appendChild(line);
+            }
+
+            for (let y = minCmY; y <= maxCmY; y++) {
+                const pt1 = cmToSvg({ x: minCmX, y: y });
+                const pt2 = cmToSvg({ x: maxCmX, y: y });
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', pt1.x); line.setAttribute('y1', pt1.y);
+                line.setAttribute('x2', pt2.x); line.setAttribute('y2', pt2.y);
+                line.setAttribute('stroke', '#cbd5e1'); line.setAttribute('stroke-width', '1');
+                line.setAttribute('pointer-events', 'none');
+                gridLayer.appendChild(line);
+            }
+        }
+
+        function renderDashedBackground() {
+            dashedBgLayer.innerHTML = '';
+            const pointsStr = BASE_TRAPEZOID.map(pt => {
+                const svgPt = cmToSvg(pt);
+                return `${svgPt.x},${svgPt.y}`;
+            }).join(' ');
+
+            const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            poly.setAttribute('points', pointsStr);
+            poly.setAttribute('fill', 'none');
+            poly.setAttribute('stroke', '#475569');
+            poly.setAttribute('stroke-width', '2.5');
+            poly.setAttribute('stroke-dasharray', '6,4');
+            poly.setAttribute('pointer-events', 'none');
+            dashedBgLayer.appendChild(poly);
+
+            // 点線台形に付属する固定のABCD文字
+            const fixedLabels = [
+                { text: 'B', pt: BASE_TRAPEZOID[0], dx: -10, dy: 20 },
+                { text: 'C', pt: BASE_TRAPEZOID[1], dx: 10, dy: 20 },
+                { text: 'D', pt: BASE_TRAPEZOID[2], dx: 8, dy: -18 },
+                { text: 'A', pt: BASE_TRAPEZOID[3], dx: -8, dy: -18 }
+            ];
+
+            fixedLabels.forEach(lbl => {
+                const svgPt = cmToSvg(lbl.pt);
+                const textElem = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                textElem.setAttribute('x', svgPt.x + lbl.dx);
+                textElem.setAttribute('y', svgPt.y + lbl.dy);
+                textElem.setAttribute('font-size', '22');
+                textElem.setAttribute('font-weight', 'bold');
+                textElem.setAttribute('font-family', 'Zen Maru Gothic, sans-serif');
+                textElem.setAttribute('fill', '#1e293b');
+                textElem.setAttribute('text-anchor', 'middle');
+                textElem.setAttribute('dominant-baseline', 'central');
+                textElem.setAttribute('pointer-events', 'none');
+                textElem.textContent = lbl.text;
+                dashedBgLayer.appendChild(textElem);
+            });
+        }
+
+        function resetToInitialShape() {
+            finishTextEditing();
+            historyStack = [];
+            state.penColor = '#1e293b';
+            state.isErasing = false;
+            state.textElements = [];
+            updatePenUI();
+            state.pieces = [{
+                id: 'piece-0',
+                vertices: BASE_TRAPEZOID.map(pt => cmToSvg(pt)),
+                labels: [],
+                x: 0,
+                y: 0,
+                rotation: 0
+            }];
+            state.selectedPieceIndex = null;
+            memoCtx.clearRect(0, 0, memoCanvas.width, memoCanvas.height);
+            render();
+            setMode('cut');
+        }
+
+        function duplicatePieces() {
+            if (state.pieces.length === 0) return;
+            saveHistory();
+
+            const targetIndices = (state.selectedPieceIndex !== null && state.selectedPieceIndex < state.pieces.length)
+                ? [state.selectedPieceIndex]
+                : state.pieces.map((_, i) => i);
+
+            const newPieces = [];
+            targetIndices.forEach(idx => {
+                const orig = state.pieces[idx];
+                const copy = JSON.parse(JSON.stringify(orig));
+                copy.id = `piece-dup-${Date.now()}-${Math.random()}`;
+                copy.x += SCALE;
+                copy.y += SCALE;
+                copy.labels = [];
+                newPieces.push(copy);
+            });
+
+            state.pieces = state.pieces.concat(newPieces);
+            render();
+        }
+
+        function isPointInPolygon(pt, polyVerts) {
+            let inside = false;
+            for (let i = 0, j = polyVerts.length - 1; i < polyVerts.length; j = i++) {
+                const xi = polyVerts[i].x, yi = polyVerts[i].y;
+                const xj = polyVerts[j].x, yj = polyVerts[j].y;
+                const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+                    (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi + 0.00001) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+
+        function findPieceIndexAtPoint(svgPt) {
+            for (let i = state.pieces.length - 1; i >= 0; i--) {
+                const piece = state.pieces[i];
+                const center = getPolygonCentroid(piece.vertices);
+                const worldVerts = piece.vertices.map(v => {
+                    const rotated = rotatePoint(v, center, piece.rotation);
+                    return { x: rotated.x + piece.x, y: rotated.y + piece.y };
+                });
+
+                if (isPointInPolygon(svgPt, worldVerts)) {
+                    return i;
+                }
+            }
+
+            let closestIdx = -1;
+            let minMargin = 60;
+            for (let i = state.pieces.length - 1; i >= 0; i--) {
+                const piece = state.pieces[i];
+                const center = getPolygonCentroid(piece.vertices);
+                const worldCenter = { x: center.x + piece.x, y: center.y + piece.y };
+                const dist = Math.hypot(svgPt.x - worldCenter.x, svgPt.y - worldCenter.y);
+                if (dist < minMargin) {
+                    minMargin = dist;
+                    closestIdx = i;
+                }
+            }
+            return closestIdx;
+        }
+
+        function render() {
+            renderGrid();
+            renderDashedBackground();
+            piecesLayer.innerHTML = '';
+
+            state.pieces.forEach((piece, pieceIdx) => {
+                const isSelected = (pieceIdx === state.selectedPieceIndex);
+                const center = getPolygonCentroid(piece.vertices);
+
+                const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                group.setAttribute('id', `piece-group-${pieceIdx}`);
+                group.setAttribute('transform', `translate(${piece.x}, ${piece.y}) rotate(${piece.rotation}, ${center.x}, ${center.y})`);
+                group.classList.add('piece-draggable');
+
+                const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                poly.setAttribute('points', piece.vertices.map(p => `${p.x},${p.y}`).join(' '));
+                poly.setAttribute('fill', '#fbcfe8');
+                poly.setAttribute('fill-opacity', '0.6');
+                poly.setAttribute('stroke', '#000000');
+                poly.setAttribute('stroke-width', '2.5');
+                poly.setAttribute('stroke-linejoin', 'round');
+                group.appendChild(poly);
+
+                if (isSelected && (state.activeMode === 'select' || state.activeMode === 'rotate' || state.activeMode === 'duplicate')) {
+                    const polyOutline = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                    polyOutline.setAttribute('class', 'piece-outline');
+                    polyOutline.setAttribute('points', piece.vertices.map(p => `${p.x},${p.y}`).join(' '));
+                    polyOutline.setAttribute('fill', 'none');
+                    polyOutline.setAttribute('stroke', '#2563eb');
+                    polyOutline.setAttribute('stroke-width', '3');
+                    polyOutline.setAttribute('stroke-dasharray', '5,4');
+                    polyOutline.setAttribute('pointer-events', 'none');
+                    group.appendChild(polyOutline);
+                }
+
+                if (state.activeMode === 'rotate') {
+                    const rotBtnGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    rotBtnGroup.setAttribute('cursor', 'pointer');
+
+                    const rotCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    rotCircle.setAttribute('cx', center.x); rotCircle.setAttribute('cy', center.y);
+                    rotCircle.setAttribute('r', '22');
+                    rotCircle.setAttribute('fill', '#2563eb');
+                    rotCircle.setAttribute('stroke', '#ffffff');
+                    rotCircle.setAttribute('stroke-width', '2');
+                    rotBtnGroup.appendChild(rotCircle);
+
+                    const rotIcon = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    rotIcon.setAttribute('x', center.x); rotIcon.setAttribute('y', center.y + 6);
+                    rotIcon.setAttribute('text-anchor', 'middle'); rotIcon.setAttribute('fill', '#ffffff');
+                    rotIcon.setAttribute('font-size', '16'); rotIcon.setAttribute('font-weight', 'bold');
+                    rotIcon.textContent = '🔄';
+                    rotBtnGroup.appendChild(rotIcon);
+
+                    const handleRotateClick = (e) => {
+                        e.stopPropagation();
+                        if (e.cancelable) e.preventDefault();
+                        saveHistory();
+                        piece.rotation = (piece.rotation + 180) % 360;
+                        render();
+                    };
+
+                    rotBtnGroup.addEventListener('pointerdown', handleRotateClick);
+                    group.appendChild(rotBtnGroup);
+                }
+
+                piecesLayer.appendChild(group);
+            });
+
+            renderTextLayer();
+        }
+
+        function updateSelectedHighlight(selectedIdx) {
+            state.pieces.forEach((p, idx) => {
+                const g = document.getElementById(`piece-group-${idx}`);
+                if (!g) return;
+                let outline = g.querySelector('.piece-outline');
+                if (idx === selectedIdx && (state.activeMode === 'select' || state.activeMode === 'rotate' || state.activeMode === 'duplicate')) {
+                    if (!outline) {
+                        outline = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                        outline.setAttribute('class', 'piece-outline');
+                        outline.setAttribute('points', p.vertices.map(v => `${v.x},${v.y}`).join(' '));
+                        outline.setAttribute('fill', 'none');
+                        outline.setAttribute('stroke', '#2563eb');
+                        outline.setAttribute('stroke-width', '3');
+                        outline.setAttribute('stroke-dasharray', '5,4');
+                        outline.setAttribute('pointer-events', 'none');
+                        g.appendChild(outline);
+                    }
+                } else {
+                    if (outline) {
+                        outline.remove();
+                    }
+                }
+            });
+        }
+
+        function cutPolygonByLine(polygonVertices, polygonLabels, lineP1, lineP2) {
+            const A = lineP2.y - lineP1.y;
+            const B = lineP1.x - lineP2.x;
+            const C = lineP2.x * lineP1.y - lineP1.x * lineP2.y;
+
+            function getSide(pt) { return A * pt.x + B * pt.y + C; }
+
+            const poly1 = [], poly2 = [];
+            const labels1 = [], labels2 = [];
+            const n = polygonVertices.length;
+
+            for (let i = 0; i < n; i++) {
+                const current = polygonVertices[i];
+                const next = polygonVertices[(i + 1) % n];
+                const labelCurr = (polygonLabels && polygonLabels[i]) ? polygonLabels[i] : null;
+
+                const sideCurrent = getSide(current);
+                const sideNext = getSide(next);
+
+                if (sideCurrent >= 0) {
+                    poly1.push(current);
+                    labels1.push(labelCurr);
+                }
+                if (sideCurrent <= 0) {
+                    poly2.push(current);
+                    labels2.push(labelCurr);
+                }
+
+                if ((sideCurrent > 0 && sideNext < 0) || (sideCurrent < 0 && sideNext > 0)) {
+                    const t = sideCurrent / (sideCurrent - sideNext);
+                    const intersectPt = {
+                        x: current.x + t * (next.x - current.x),
+                        y: current.y + t * (next.y - current.y)
+                    };
+                    poly1.push(intersectPt);
+                    labels1.push(null);
+                    poly2.push(intersectPt);
+                    labels2.push(null);
+                }
+            }
+
+            if (poly1.length >= 3 && poly2.length >= 3) {
+                return [
+                    { vertices: poly1, labels: labels1 },
+                    { vertices: poly2, labels: labels2 }
+                ];
+            }
+            return null;
+        }
+
+        function processCut(cutStart, cutEnd) {
+            let cutHappened = false;
+            const newPieces = [];
+
+            state.pieces.forEach((piece) => {
+                const center = getPolygonCentroid(piece.vertices);
+                const worldVertices = piece.vertices.map(v => {
+                    const rotated = rotatePoint(v, center, piece.rotation);
+                    return { x: rotated.x + piece.x, y: rotated.y + piece.y };
+                });
+
+                const result = cutPolygonByLine(worldVertices, piece.labels, cutStart, cutEnd);
+                if (result && !cutHappened) {
+                    saveHistory();
+                    cutHappened = true;
+                    result.forEach((item, idx) => {
+                        const newCenter = getPolygonCentroid(item.vertices);
+                        newPieces.push({
+                            id: `piece-${Date.now()}-${idx}`,
+                            vertices: item.vertices.map(v => ({ x: v.x - newCenter.x + newCenter.x, y: v.y - newCenter.y + newCenter.y })),
+                            labels: item.labels,
+                            x: 0,
+                            y: 0,
+                            rotation: 0
+                        });
+                    });
+                } else {
+                    newPieces.push(piece);
+                }
+            });
+
+            if (cutHappened) {
+                state.pieces = newPieces;
+                state.selectedPieceIndex = null;
+                render();
+                setMode('select');
+            }
+        }
+
+        const handleStartCutOrAdd = (e) => {
+            const coords = getSvgCoords(e);
+
+            if (state.activeMode === 'pen') return;
+
+            if (state.activeMode === 'text') {
+                if (e.target && e.target.closest('#text-editor')) return;
+                
+                // 「PCで書く」モードで指定箇所をタップ
+                let startPos = coords;
+
+                // 入力位置が図形と重なっていない場合はマス目に吸着
+                if (!isTextOverlappingPiece(coords.x, coords.y, 100, 50)) {
+                    startPos = snapToGridPoint(coords);
+                }
+
+                const newTextObj = {
+                    id: 'text-' + Date.now(),
+                    x: startPos.x,
+                    y: startPos.y,
+                    text: ''
+                };
+                state.textElements.push(newTextObj);
+                startTextEditing(newTextObj);
+                return;
+            }
+
+            if (state.activeMode === 'duplicate') {
+                if (e.cancelable) e.preventDefault();
+                const pieceIdx = findPieceIndexAtPoint(coords);
+                if (pieceIdx !== -1) {
+                    state.selectedPieceIndex = pieceIdx;
+                }
+                duplicatePieces();
+                return;
+            }
+
+            if (state.activeMode === 'select') {
+                if (e.cancelable) e.preventDefault();
+                const pieceIdx = findPieceIndexAtPoint(coords);
+
+                if (pieceIdx !== -1) {
+                    const piece = state.pieces[pieceIdx];
+                    saveHistory();
+                    state.selectedPieceIndex = pieceIdx;
+                    state.draggedPieceIndex = pieceIdx;
+                    state.dragStartPos = coords;
+                    state.dragPieceStartOffset = { x: piece.x, y: piece.y };
+
+                    updateSelectedHighlight(pieceIdx);
+
+                    if (e.target && e.target.setPointerCapture && e.pointerId !== undefined) {
+                        try { e.target.setPointerCapture(e.pointerId); } catch(err) {}
+                    }
+                }
+                return;
+            }
+
+            if (state.activeMode === 'rotate') {
+                if (e.cancelable) e.preventDefault();
+                const pieceIdx = findPieceIndexAtPoint(coords);
+                if (pieceIdx !== -1) {
+                    saveHistory();
+                    state.pieces[pieceIdx].rotation = (state.pieces[pieceIdx].rotation + 180) % 360;
+                    render();
+                }
+                return;
+            }
+
+            if (state.activeMode === 'cut') {
+                if (e.cancelable) e.preventDefault();
+                const snappedStart = snapToGridPoint(coords);
+                
+                state.isDrawingCut = true;
+                state.cutStart = snappedStart;
+                state.cutCurrent = snappedStart;
+
+                cutStartIndicator.setAttribute('cx', snappedStart.x);
+                cutStartIndicator.setAttribute('cy', snappedStart.y);
+                cutStartIndicator.setAttribute('opacity', '1');
+
+                cutEndIndicator.setAttribute('cx', snappedStart.x);
+                cutEndIndicator.setAttribute('cy', snappedStart.y);
+                cutEndIndicator.setAttribute('opacity', '1');
+            }
+        };
+
+        const handleMoveCutOrAdd = (e) => {
+            const coords = getSvgCoords(e);
+
+            if (state.draggedPieceIndex !== null && state.activeMode === 'select') {
+                if (e.cancelable) e.preventDefault();
+                const dx = coords.x - state.dragStartPos.x;
+                const dy = coords.y - state.dragStartPos.y;
+                const piece = state.pieces[state.draggedPieceIndex];
+                
+                piece.x = state.dragPieceStartOffset.x + dx;
+                piece.y = state.dragPieceStartOffset.y + dy;
+
+                const g = document.getElementById(`piece-group-${state.draggedPieceIndex}`);
+                if (g) {
+                    const center = getPolygonCentroid(piece.vertices);
+                    g.setAttribute('transform', `translate(${piece.x}, ${piece.y}) rotate(${piece.rotation}, ${center.x}, ${center.y})`);
+                }
+                return;
+            }
+
+            if (state.isDrawingCut) {
+                if (e.cancelable) e.preventDefault();
+                const snapped = snapToGridPoint(coords);
+                state.cutCurrent = snapped;
+
+                userCutLine.setAttribute('d', `M ${state.cutStart.x} ${state.cutStart.y} L ${snapped.x} ${snapped.y}`);
+                cutEndIndicator.setAttribute('cx', snapped.x);
+                cutEndIndicator.setAttribute('cy', snapped.y);
+            }
+        };
+
+        const handleEndCutOrAdd = (e) => {
+            if (state.draggedPieceIndex !== null) {
+                const piece = state.pieces[state.draggedPieceIndex];
+                
+                const center = getPolygonCentroid(piece.vertices);
+                const v0 = rotatePoint(piece.vertices[0], center, piece.rotation);
+                const currentV0_x = v0.x + piece.x;
+                const currentV0_y = v0.y + piece.y;
+
+                const gridStep = SCALE / 2;
+                const snappedV0_x = Math.round((currentV0_x - ORIGIN.x) / gridStep) * gridStep + ORIGIN.x;
+                const snappedV0_y = Math.round((currentV0_y - ORIGIN.y) / gridStep) * gridStep + ORIGIN.y;
+
+                piece.x = snappedV0_x - v0.x;
+                piece.y = snappedV0_y - v0.y;
+
+                state.draggedPieceIndex = null;
+                render();
+            }
+
+            if (state.isDrawingCut) {
+                state.isDrawingCut = false;
+                userCutLine.setAttribute('d', '');
+                cutStartIndicator.setAttribute('opacity', '0');
+                cutEndIndicator.setAttribute('opacity', '0');
+
+                if (state.cutStart && state.cutCurrent) {
+                    const dist = Math.hypot(state.cutCurrent.x - state.cutStart.x, state.cutCurrent.y - state.cutStart.y);
+                    if (dist > 20) {
+                        processCut(state.cutStart, state.cutCurrent);
+                    }
+                }
+            }
+        };
+
+        function setupPenEvents() {
+            function resizeCanvas() {
+                memoCanvas.width = memoCanvas.clientWidth * window.devicePixelRatio;
+                memoCanvas.height = memoCanvas.clientHeight * window.devicePixelRatio;
+                memoCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                if (state.editingTextId) {
+                    const textObj = state.textElements.find(t => t.id === state.editingTextId);
+                    if (textObj) positionTextEditor(textObj.x, textObj.y);
+                }
+            }
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+
+            function getCanvasCoords(e) {
+                const rect = memoCanvas.getBoundingClientRect();
+                let clientX = e.clientX, clientY = e.clientY;
+                if ((clientX === undefined || clientX === null) && e.touches && e.touches.length > 0) {
+                    clientX = e.touches[0].clientX; clientY = e.touches[0].clientY;
+                }
+                return {
+                    x: clientX - rect.left,
+                    y: clientY - rect.top
+                };
+            }
+
+            memoCanvas.addEventListener('pointerdown', (e) => {
+                if (state.activeMode !== 'pen') return;
+                state.isDrawingMemo = true;
+                state.lastPenPos = getCanvasCoords(e);
+            });
+
+            memoCanvas.addEventListener('pointermove', (e) => {
+                if (!state.isDrawingMemo || state.activeMode !== 'pen') return;
+                const pos = getCanvasCoords(e);
+                memoCtx.beginPath();
+                if (state.isErasing) {
+                    memoCtx.globalCompositeOperation = 'destination-out';
+                    memoCtx.lineWidth = 20;
+                } else {
+                    memoCtx.globalCompositeOperation = 'source-over';
+                    memoCtx.strokeStyle = state.penColor;
+                    memoCtx.lineWidth = state.penSize;
+                    memoCtx.lineCap = 'round';
+                    memoCtx.lineJoin = 'round';
+                }
+                memoCtx.moveTo(state.lastPenPos.x, state.lastPenPos.y);
+                memoCtx.lineTo(pos.x, pos.y);
+                memoCtx.stroke();
+                state.lastPenPos = pos;
+            });
+
+            const stopDrawing = () => {
+                state.isDrawingMemo = false;
+            };
+
+            memoCanvas.addEventListener('pointerup', stopDrawing);
+            memoCanvas.addEventListener('pointercancel', stopDrawing);
+        }
+
+        function updatePenUI() {
+            const blackBtn = document.getElementById('pen-black');
+            const redBtn = document.getElementById('pen-red');
+            const blueBtn = document.getElementById('pen-blue');
+            const eraserBtn = document.getElementById('pen-eraser');
+
+            if (!blackBtn || !redBtn || !blueBtn || !eraserBtn) return;
+
+            blackBtn.className = "pen-btn w-7 h-7 rounded-full bg-slate-800 hover:scale-105 transition shrink-0 border-2 border-white ring-2 ring-transparent";
+            redBtn.className = "pen-btn w-7 h-7 rounded-full bg-rose-500 hover:scale-105 transition shrink-0 border-2 border-white ring-2 ring-transparent";
+            blueBtn.className = "pen-btn w-7 h-7 rounded-full bg-blue-500 hover:scale-105 transition shrink-0 border-2 border-white ring-2 ring-transparent";
+            eraserBtn.className = "h-8 px-2.5 bg-white hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition flex items-center gap-1 border border-slate-300 shrink-0";
+
+            if (state.isErasing) {
+                eraserBtn.classList.add('bg-slate-200', 'ring-2', 'ring-slate-500');
+            } else if (state.penColor === '#1e293b') {
+                blackBtn.className = "pen-btn w-7 h-7 rounded-full bg-slate-800 transition shrink-0 border-2 border-white ring-2 ring-slate-800 scale-110";
+            } else if (state.penColor === '#f43f5e') {
+                redBtn.className = "pen-btn w-7 h-7 rounded-full bg-rose-500 transition shrink-0 border-2 border-white ring-2 ring-rose-500 scale-110";
+            } else if (state.penColor === '#3b82f6') {
+                blueBtn.className = "pen-btn w-7 h-7 rounded-full bg-blue-500 transition shrink-0 border-2 border-white ring-2 ring-blue-500 scale-110";
+            }
+        }
+
+        function setMode(mode) {
+            if (state.editingTextId && mode !== 'text') {
+                finishTextEditing();
+            }
+            state.activeMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('mode-active');
+            });
+            const modeBtnMap = {
+                'duplicate': 'btn-duplicate',
+                'cut': 'btn-mode-cut',
+                'select': 'btn-mode-select',
+                'rotate': 'btn-mode-rotate',
+                'text': 'btn-mode-text',
+                'pen': 'btn-mode-pen'
+            };
+            const activeBtn = document.getElementById(modeBtnMap[mode]);
+            if (activeBtn) activeBtn.classList.add('mode-active');
+
+            if (mode === 'pen') {
+                memoCanvas.style.pointerEvents = 'auto';
+            } else {
+                memoCanvas.style.pointerEvents = 'none';
+            }
+            updatePenUI();
+            render();
+        }
+
+        document.getElementById('btn-duplicate').addEventListener('click', () => {
+            if (state.activeMode === 'duplicate') {
+                duplicatePieces();
+            } else {
+                setMode('duplicate');
+            }
+        });
+        document.getElementById('btn-mode-cut').addEventListener('click', () => setMode('cut'));
+        document.getElementById('btn-mode-select').addEventListener('click', () => setMode('select'));
+        document.getElementById('btn-mode-rotate').addEventListener('click', () => setMode('rotate'));
+        document.getElementById('btn-mode-text').addEventListener('click', () => setMode('text'));
+        document.getElementById('btn-mode-pen').addEventListener('click', () => setMode('pen'));
+
+        document.getElementById('btn-reset').addEventListener('click', resetToInitialShape);
+        document.getElementById('btn-undo').addEventListener('click', () => {
+            finishTextEditing();
+            if (historyStack.length > 0) {
+                const prev = historyStack.pop();
+                state.pieces = prev.pieces;
+                state.textElements = prev.textElements || [];
+                state.selectedPieceIndex = null;
+                render();
+            }
+        });
+
+        // Pen colors
+        document.getElementById('pen-black').addEventListener('click', () => {
+            state.penColor = '#1e293b'; state.isErasing = false; setMode('pen'); updatePenUI();
+        });
+        document.getElementById('pen-red').addEventListener('click', () => {
+            state.penColor = '#f43f5e'; state.isErasing = false; setMode('pen'); updatePenUI();
+        });
+        document.getElementById('pen-blue').addEventListener('click', () => {
+            state.penColor = '#3b82f6'; state.isErasing = false; setMode('pen'); updatePenUI();
+        });
+        document.getElementById('pen-eraser').addEventListener('click', () => {
+            state.isErasing = true; setMode('pen'); updatePenUI();
+        });
+        document.getElementById('btn-clear-memo').addEventListener('click', () => {
+            memoCtx.clearRect(0, 0, memoCanvas.width, memoCanvas.height);
+        });
+
+        // Screenshot capture
+        document.getElementById('btn-screenshot').addEventListener('click', () => {
+            finishTextEditing();
+            html2canvas(document.getElementById('capture-area'), {
+                scale: 2,
+                backgroundColor: '#ffffff'
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `台形の面積_${Date.now()}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+            });
+        });
+
+        svg.addEventListener('pointerdown', handleStartCutOrAdd);
+        svg.addEventListener('pointermove', handleMoveCutOrAdd);
+        svg.addEventListener('pointerup', handleEndCutOrAdd);
+        svg.addEventListener('pointercancel', handleEndCutOrAdd);
+
+        window.onload = function() {
+            setupPenEvents();
+            resetToInitialShape();
+        };
+    </script>
+</body>
+</html>
